@@ -12,9 +12,7 @@ import pickle #pprint, pickle
 
 import pandas as pd
 import re
-from collections import Counter
 import nltk
-import spacy
 from nltk.corpus import stopwords
 
 from sklearn.model_selection import train_test_split
@@ -34,18 +32,12 @@ from sklearn import metrics
 #from matplotlib.backends.backend_pdf import PdfPages
 
 import warnings
-from sklearn.model_selection import train_test_split
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.simplefilter(action='ignore', category=Warning)
 
-NEW_DATA = False
+NEW_DATA = False  #use pre saved data from file
 NEW_DATA = True
-#import sys
-#sys.stdout = open('graphs', 'w')
-
-#pp = PdfPages('foo.pdf')
-#pp.savefig(plot1)
-
+DO_ALL=True#False  #do all three culusters
 
 def clean_data(text):
     text = text.lower()
@@ -64,7 +56,7 @@ if NEW_DATA is  True:
     print("gen new data.....")
     file = 'articles cut 1.csv'
     file = 'articles1.csv'
-    df = pd.read_csv(file,nrows=5000)
+    df = pd.read_csv(file,nrows=40000)
     df = df[(df['year'] == 2016) & (df['month'] < 13)] # use only 2016 data
 
     df.dropna(subset=['author'], how='all', inplace = True)
@@ -73,8 +65,7 @@ if NEW_DATA is  True:
     LE = LabelEncoder()
     df['author_id'] = LE.fit_transform(df['author'])
 
-    print ("articles ->",len(df))
-    print ("unique author IDs ->", df['author_id'].nunique())
+    print ("Input records->",len(df))
 
     s= (df.groupby(['author']).author.agg('count'))
     s.sort_values(ascending=False,inplace=True)  # get list of top 10 authors
@@ -88,21 +79,14 @@ if NEW_DATA is  True:
     features = pd.DataFrame(columns=new_cols)
 
     for x,item in df.iterrows():
-        x=nlp(clean_data(str(item['text'])))
+        x=clean_data(str(item['text']))
         name = item['author']
         author_id = item['author_id']
         row = [name, author_id, x, len(x)]
         features.loc[len(features)] = row
-    #print(name,author_id)
-
-#features['text'] = features['text'].str.lower().str.replace('—', '')
-#features['text'] = features['text'].str.replace('"', '')
-#rint("fetures len:",len(features))
 
     articles = pd.DataFrame(columns = ['author','author_id','content'])
-    print("len of articles:",len(articles))
     lemmatizer = WordNetLemmatizer()
-
 
     for i,j,k in zip(features.text, features.author, features.author_id):
         line = []
@@ -112,7 +96,6 @@ if NEW_DATA is  True:
                 word = lemmatizer.lemmatize(word)
                 line.append(word)
         articles = articles.append({'content': ' '.join(line), 'author':j,'author_id':k}, ignore_index=True)
-#print("len of articles:",len(articles),"line len",len(line))
 
 
     xtrain, xtest = train_test_split(articles, test_size=0.25, random_state=0)
@@ -120,7 +103,7 @@ if NEW_DATA is  True:
     vectorizer = TfidfVectorizer(max_df=0.5,min_df=2,use_idf=True, smooth_idf=True,norm=u'l2',                             stop_words='english')
 
     articles_tfidf=vectorizer.fit_transform(features.text)  #vectorize data
-    print("features:",articles_tfidf.get_shape()[1])
+    print("articles",articles_tfidf.get_shape()[1])
 
 #create test sets
     xtrain_tfidf, xtest_tfidf= train_test_split(articles_tfidf, test_size=0.25, random_state=0)
@@ -133,9 +116,6 @@ if NEW_DATA is  True:
 
     for idx, j in zip(*xtrain_tfidf_csr.nonzero()):  # get features words and scores
         tfidf_by_article[idx][terms[j]] = xtrain_tfidf_csr[idx, j]
-#print('\n\nOriginal sentence:', xtrain.iloc[index])
-#print('Tf_idf vector:', tfidf_by_article[index])
-
 
 #for feature_cnt in range(400,1000,100):#,150,50):#25,250,25):
     start = 600
@@ -210,8 +190,8 @@ plt.show()
 #print("mean shift, cluster_centers_indices", n_clusters)
 """
 
-SKIP=True
-if SKIP is False:
+#SKIP=True
+if DO_ALL is True:
     sc = SpectralClustering(n_clusters=6)#n_clusters)
     sc.fit(xtrain_lsa)
         
@@ -247,7 +227,7 @@ af_type = 'precomputed'
 af_type = 'euclidean'
 
 af = AffinityPropagation(damping=0.95, max_iter=200, convergence_iter=15, \
-                         copy=True, preference=None, affinity='euclidean',\
+                         copy=True, preference=None, affinity=af_type,\
                          verbose=False)#, affinity=’euclidean’)
 af.fit(xtrain_lsa)
 cluster_centers_indices = af.cluster_centers_indices_
